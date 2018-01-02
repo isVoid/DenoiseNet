@@ -32,6 +32,8 @@ Model is trained on house15K dataset for 24 hours on an AWS g2.8xlarge instance.
 
 ## Train with your own dataset
 
+In order to train with your machine, please change device layout in the code.
+
 #### Loading your dataset
 2 ways of providing training data is provided:
 - In two separate folders, e.g. `Clean/` and `Noisy/`, clean and noisy images are lined up in the same order. For example:
@@ -65,8 +67,7 @@ python3 denoise_train.py -cpr /path/to/Clean/ -npr /path/to/Noisy/
 ```shell
 python3 denoise_input.py /home/ubuntu/data_dev/ --ycbcr
 ```
-`--ycbcr` converts your images into ycbcr format.
-
+`--ycbcr` converts your images into ycbcr format.<br>
 Then run this line to train:
 ```shell
 python3 denoise_train.py -df /path/to/dataset.tfrecords
