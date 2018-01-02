@@ -2,9 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from skimage.measure import compare_psnr
 import numpy as np
-import CNN
 import Denoisenet
 import tensorflow as tf
 from PIL import Image
@@ -15,8 +13,6 @@ import time
 import argparse
 
 PATCH_SHAPE = (128 ,128, 3)
-
-net_arch = "CNN"
 
 def _log10(x):
     return np.log(x) / np.log(10)
@@ -156,21 +152,10 @@ def eval_patch(X, y, sess = None):
 
     graph = tf.get_default_graph()
 
-    if net_arch == "CNN":
-        X_train = graph.get_tensor_by_name("X_train:0")
-        y_train = graph.get_tensor_by_name("y_train:0")
-    elif net_arch == "denoisenet":
-        X_train = graph.get_tensor_by_name("input/mul:0")
-        y_train = graph.get_tensor_by_name("input/mul_1:0")
-
-    if net_arch == "CNN":
-        denoised = graph.get_tensor_by_name("denoised/Sigmoid:0")
-        loss = CNN.loss(denoised, y_train)
-    elif net_arch == "denoisenet":
-        denoised = graph.get_tensor_by_name("denoised:0")
-        # print ("denoised", denoised.shape)
-        # print ("y_train", y_train.shape)
-        loss = Denoisenet.loss(denoised, y_train)
+    X_train = graph.get_tensor_by_name("input/mul:0")
+    y_train = graph.get_tensor_by_name("input/mul_1:0")
+    denoised = graph.get_tensor_by_name("denoised:0")
+    loss = Denoisenet.loss(denoised, y_train)
 
     denoised, loss = sess.run([denoised, loss], feed_dict={X_train : X, y_train : y})
 
@@ -272,9 +257,6 @@ def main(args):
     else:
         Output_path = './Output/'
 
-    global net_arch
-    net_arch = args.net_arch if args.net_arch else "CNN"
-
     # Read Images, discard alpha channel
     X = np.asarray(Image.open(X_path).convert("YCbCr"))[:, :, 0:3]
     y = np.asarray(Image.open(y_path).convert("YCbCr"))[:, :, 0:3]
@@ -314,7 +296,6 @@ if __name__ == '__main__':
     parser.add_argument('Model', type=str, help="Path of the trained Tensorflow Model, this builds tensorflow graph.")
     parser.add_argument('Checkpoint', type=str, help="Path of Tensorflow checkpoint, this restores parameters.")
     parser.add_argument('--Output', type=str, help="Path of the output image")
-    parser.add_argument('--net_arch', "-na", type=str, help="Network architechture")
 
     args = parser.parse_args()
 main(args)

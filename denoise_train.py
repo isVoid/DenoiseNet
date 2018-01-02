@@ -73,7 +73,7 @@ def random_mini_batches(X_train, y_train, mini_batch_size=200, seed = 2):
 
     return minibatches
 
-def train(X, y, learning_rate = 1e-3, mini_batch_size = 16, iters = 1e7, model = "CNN"):
+def train(X, y, learning_rate = 1e-3, mini_batch_size = 16, debug = False):
 
     """Function to train deep denoise model
 
@@ -147,18 +147,22 @@ def train(X, y, learning_rate = 1e-3, mini_batch_size = 16, iters = 1e7, model =
     init = tf.global_variables_initializer()
 
     # Clear previously saved model
-    if model == "CNN":
-        model_dir = "./Model/CNN/"
-    elif model == "denoisenet":
-        model_dir = "./Model/denoisenet"
+    model_dir = "./Model/denoisenet"
     for f in os.listdir(model_dir):
         os.remove(os.path.join(model_dir, f))
+
+    for f in os.listdir(LOGDIR):
+        os.remove(os.path.join(LOGDIR, f))
 
     config = tf.ConfigProto(allow_soft_placement = True)
     with tf.Session(config = config) as sess:
 
-        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        run_metadata = tf.RunMetadata()
+        if debug:
+            run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+            run_metadata = tf.RunMetadata()
+        else:
+            run_options = tf.RunOptions(trace_level=tf.RunOptions.NO_TRACE)
+            run_metadata = tf.RunMetadata()
 
         sess.run(init)
 
@@ -192,35 +196,32 @@ def train(X, y, learning_rate = 1e-3, mini_batch_size = 16, iters = 1e7, model =
                 mini_batch_count = mini_batch_X.shape[0]
 
                 t = time.time()
-                _, _, _, mini_batch_loss, s = sess.run([trainop_Y, trainop_Cb, trainop_Cr, loss, summ], feed_dict = {X_train : mini_batch_X, y_train: mini_batch_y}, options=run_options, run_metadata=run_metadata)
+                _, _, _, mini_batch_loss, s, d = sess.run([trainop_Y, trainop_Cb, trainop_Cr, loss, summ, denoised], feed_dict = {X_train : mini_batch_X, y_train: mini_batch_y}, options=run_options, run_metadata=run_metadata)
                 t = time.time() - t
 
                 cost += mini_batch_loss / mini_batch_count
 
                 tf.summary.scalar("Mean Squared Error", cost)
+                tf.summary.image('denoised', d, 3)
                 writer.add_summary(s, i)
 
                 smooth_loss = (smooth_alpha) * smooth_loss + (1-smooth_alpha) * cost
                 smooth_time = (smooth_alpha) * smooth_time + (1-smooth_alpha) * t
                 print ("Loss after iterations %d, %f, smooth, %f, time this iter %f, smooth %f" % (i, cost, smooth_loss, t, smooth_time))
 
-                # Create the Timeline object, and write it to a json
-                tl = timeline.Timeline(run_metadata.step_stats)
-                ctf = tl.generate_chrome_trace_format()
-                with open('./tmp/timeline.json', 'w') as f:
-                    f.write(ctf)
+                if debug:
+                    # Create the Timeline object, and write it to a json
+                    tl = timeline.Timeline(run_metadata.step_stats)
+                    ctf = tl.generate_chrome_trace_format()
+                    with open('./tmp/timeline.json', 'w') as f:
+                        f.write(ctf)
+
                 i += 1
                 if i % 1000 == 0:
-                    if model == "CNN":
-                        saver.save(sess, './Model/CNN/denoise_model_I%d.ckpt' % i, global_step = i)
-                    elif model == "denoisenet":
-                        saver.save(sess, './Model/denoisenet/denoise_model_I%d.ckpt' % i, global_step = i)
-
-                # Forever run
-                # if i > iters: return
+                    saver.save(sess, './Model/denoisenet/denoise_model_I%d.ckpt' % i, global_step = i)
 
 
-def train_tensors(X, y, learning_rate = 1e-3, mini_batch_size = 16, iters = 1e7, model = "CNN", debug = False):
+def train_tensors(X, y, learning_rate = 1e-3, mini_batch_size = 16, debug = False):
 
     """Function to train deep denoise model
 
@@ -255,50 +256,44 @@ def train_tensors(X, y, learning_rate = 1e-3, mini_batch_size = 16, iters = 1e7,
         tf.summary.image('input', X, 3)
         tf.summary.image('groundtruth', y, 3)
 
-        if model == "CNN":
-            denoised, loss = CNN.feed_forward(X, y)
-        elif model == "denoisenet":
-            with tf.device("gpu:1"):
-                print ("Y Channel Net")
-                denoisedY, lossY = Denoisenet.feed_forward(X[:, :, :, 0], y[:, :, :, 0], scope = "Y")
-            with tf.device("gpu:2"):
-                print ("Cb Channel Net")
-                denoisedCb, lossCb = Denoisenet.feed_forward(X[:, :, :, 1], y[:, :, :, 1], scope = "Cb")
-            with tf.device("gpu:3"):
-                print ("Cr Channel Net")
-                denoisedCr, lossCr = Denoisenet.feed_forward(X[:, :, :, 2], y[:, :, :, 2], scope = "Cr")
+        with tf.device("gpu:1"):
+            print ("Y Channel Net")
+            denoisedY, lossY = Denoisenet.feed_forward(X[:, :, :, 0], y[:, :, :, 0], scope = "Y")
+        with tf.device("gpu:2"):
+            print ("Cb Channel Net")
+            denoisedCb, lossCb = Denoisenet.feed_forward(X[:, :, :, 1], y[:, :, :, 1], scope = "Cb")
+        with tf.device("gpu:3"):
+            print ("Cr Channel Net")
+            denoisedCr, lossCr = Denoisenet.feed_forward(X[:, :, :, 2], y[:, :, :, 2], scope = "Cr")
 
-            with tf.device("gpu:0"):
-                denoised = tf.stack([denoisedY[:,:,:,0], denoisedCb[:,:,:,0], denoisedCr[:,:,:,0]], axis = 3, name = "denoised")
-                print (denoised.name)
-                loss = tf.reduce_sum([lossY, lossCb, lossCr], keep_dims = False)
+        with tf.device("gpu:0"):
+            denoised = tf.stack([denoisedY[:,:,:,0], denoisedCb[:,:,:,0], denoisedCr[:,:,:,0]], axis = 3, name = "denoised")
+            print (denoised.name)
+            loss = tf.reduce_sum([lossY, lossCb, lossCr], keep_dims = False)
 
-                tf.summary.scalar("Mean Squared Error", loss)
+            tf.summary.scalar("Mean Squared Error", loss)
 
-            Y_vars = tf.trainable_variables(scope = "Y")
-            Cb_vars = tf.trainable_variables(scope = "Cb")
-            Cr_vars = tf.trainable_variables(scope = "Cr")
+        Y_vars = tf.trainable_variables(scope = "Y")
+        Cb_vars = tf.trainable_variables(scope = "Cb")
+        Cr_vars = tf.trainable_variables(scope = "Cr")
 
-            with tf.device("gpu:1"):
-                optim_Y = tf.train.AdamOptimizer(learning_rate = learning_rate)
-                gvs_Y = optim_Y.compute_gradients(loss, var_list = Y_vars)
-                trainop_Y = optim_Y.apply_gradients(gvs_Y)
-            with tf.device("gpu:2"):
-                optim_Cb = tf.train.AdamOptimizer(learning_rate = learning_rate)
-                gvs_Cb = optim_Y.compute_gradients(loss, var_list = Cb_vars)
-                trainop_Cb = optim_Cb.apply_gradients(gvs_Cb)
-            with tf.device("gpu:3"):
-                optim_Cr = tf.train.AdamOptimizer(learning_rate = learning_rate)
-                gvs_Cr = optim_Y.compute_gradients(loss, var_list = Cr_vars)
-                trainop_Cr = optim_Cr.apply_gradients(gvs_Cr)
+        with tf.device("gpu:1"):
+            optim_Y = tf.train.AdamOptimizer(learning_rate = learning_rate)
+            gvs_Y = optim_Y.compute_gradients(loss, var_list = Y_vars)
+            trainop_Y = optim_Y.apply_gradients(gvs_Y)
+        with tf.device("gpu:2"):
+            optim_Cb = tf.train.AdamOptimizer(learning_rate = learning_rate)
+            gvs_Cb = optim_Y.compute_gradients(loss, var_list = Cb_vars)
+            trainop_Cb = optim_Cb.apply_gradients(gvs_Cb)
+        with tf.device("gpu:3"):
+            optim_Cr = tf.train.AdamOptimizer(learning_rate = learning_rate)
+            gvs_Cr = optim_Y.compute_gradients(loss, var_list = Cr_vars)
+            trainop_Cr = optim_Cr.apply_gradients(gvs_Cr)
 
         init = tf.global_variables_initializer()
 
     # Clear previously saved model
-    if model == "CNN":
-        model_dir = "./Model/CNN/"
-    elif model == "denoisenet":
-        model_dir = "./Model/denoisenet"
+    model_dir = "./Model/denoisenet"
     for f in os.listdir(model_dir):
         os.remove(os.path.join(model_dir, f))
 
@@ -338,12 +333,13 @@ def train_tensors(X, y, learning_rate = 1e-3, mini_batch_size = 16, iters = 1e7,
                 cost = 0.
 
                 t = time.time()
-                _, _, _, mini_batch_loss, s = sess.run([trainop_Y, trainop_Cb, trainop_Cr, loss, summ], options=run_options, run_metadata=run_metadata)
+                _, _, _, mini_batch_loss, s, d = sess.run([trainop_Y, trainop_Cb, trainop_Cr, loss, summ, denoised], options=run_options, run_metadata=run_metadata)
                 t = time.time() - t
 
                 cost += mini_batch_loss / mini_batch_size
 
-                # tf.summary.scalar("Mean Squared Error", epoch_cost)
+                tf.summary.scalar("Mean Squared Error", epoch_cost)
+                tf.summary.image("denoised", d, 3)
                 writer.add_summary(s, i)
 
                 i += 1
@@ -359,13 +355,8 @@ def train_tensors(X, y, learning_rate = 1e-3, mini_batch_size = 16, iters = 1e7,
                         f.write(ctf)
 
                 if i % 1000 == 0:
-                    if model == "CNN":
-                        saver.save(sess, './Model/CNN/denoise_model_I%d.ckpt' % i, global_step = i)
-                    elif model == "denoisenet":
-                        saver.save(sess, './Model/denoisenet/denoise_model_I%d.ckpt' % i, global_step = i)
+                    saver.save(sess, './Model/denoisenet/denoise_model_I%d.ckpt' % i, global_step = i)
 
-                    # Forever run
-                    # if i > iters: return
         except tf.errors.OutOfRangeError:
             print('Finished one epoch, %d steps' % i)
         finally:
@@ -379,22 +370,20 @@ def main(args):
 
     lr = args.learning_rate if args.learning_rate else 1e-3
     mbs = args.mini_batch_size if args.mini_batch_size else 16
-    it = args.iterations if args.iterations else 1e7
 
     if args.dataset_file:
         dataset_file = args.dataset_file
 
         cims, nims = denoise_input.input_tfRecords(dataset_file, mbs)
 
-        train_tensors(nims, cims, learning_rate = lr, iters = it, model = model)
+        train_tensors(nims, cims, learning_rate = lr)
 
     else:
         clean_patches_root = args.clean_patches_root
         noisy_patches_root = args.noisy_patches_root
 
         clean_patches, noisy_patches = denoise_input.load_patches(CleanRoot = clean_patches_root, NoisyRoot = noisy_patches_root)
-        train(X = noisy_patches, y = clean_patches, learning_rate = lr,
-        mini_batch_size = mbs, iters = it, model = model)
+        train(X = noisy_patches, y = clean_patches, learning_rate = lr, mini_batch_size = mbs)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = "Trainer for deep denoise net.")
@@ -403,7 +392,9 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_file', '-df', type=str, help="Path to tfrecord file, if defined, cpr and npr will be ignored.")
     parser.add_argument('--learning_rate', '-lr', type=float, help="Learning Rate of train")
     parser.add_argument('--mini_batch_size', '-mbs', type=int, help="Mini batch size")
-    parser.add_argument('--iterations', '-it', type=int, help="Number of training epochs")
 
     args = parser.parse_args()
+
+    os.makedirs("./tmp/logs/", exist_ok=True)
+
     main(args)
