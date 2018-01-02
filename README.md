@@ -65,7 +65,7 @@ python3 denoise_train.py -cpr /path/to/Clean/ -npr /path/to/Noisy/
 
 - Wrap your training data in a tfrecords file. This is useful when you have an extra large dataset, and cannot fit entire dataset into memory. With the training data lined up as mentioned in the first method, run this line to start converting:
 ```shell
-python3 denoise_input.py /home/ubuntu/data_dev/ --ycbcr
+python3 denoise_input.py /path/to/CleanAndNoisy/ --ycbcr
 ```
 `--ycbcr` converts your images into ycbcr format.<br>
 Then run this line to train:
