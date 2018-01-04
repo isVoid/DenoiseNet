@@ -152,8 +152,8 @@ def eval_patch(X, y, sess = None):
 
     graph = tf.get_default_graph()
 
-    X_train = graph.get_tensor_by_name("input/mul:0")
-    y_train = graph.get_tensor_by_name("input/mul_1:0")
+    X_train = graph.get_tensor_by_name("input/mul_1:0")
+    y_train = graph.get_tensor_by_name("input/mul:0")
     denoised = graph.get_tensor_by_name("denoised:0")
     loss = Denoisenet.loss(denoised, y_train)
 
@@ -184,17 +184,22 @@ def eval_image(X, y, model = None, checkpoint = None, mini_batch_size = 16, crop
 
     config = tf.ConfigProto(allow_soft_placement = True)
     with tf.Session(config = config) as sess:
+        # Load previous model
         saver = tf.train.import_meta_graph(model)
         saver.restore(sess, tf.train.latest_checkpoint(checkpoint))
 
+        # Get Input shape
         H, W, C = X.shape
 
         if (C == 1):
             raise ValueError("Monochromatic image not supported.")
 
+        # Evaluate a large image in patches, stride is length - 2*crop
+        # To escape convolution artifacts
         stride_x = PATCH_SHAPE[0] - 2 * crop_in
         stride_y = PATCH_SHAPE[1] - 2 * crop_in
 
+        # Pad
         pad_right = stride_x - ((W - PATCH_SHAPE[1]) % stride_x)
         pad_bottom = stride_y - ((H - PATCH_SHAPE[0]) % stride_y)
 
@@ -267,6 +272,12 @@ def main(args):
 
     # Process with eval_image
     output, _ = eval_image(X, y, model, ckpt)
+
+    # Write output as image
+    name = X_path.split("/")
+    name = name[len(name) - 1]
+
+    Image.fromarray(output, mode = "YCbCr").convert("RGB").save(Output_path + name)
 
     # Output loses a few crop_in pixels
     _output = output[crop_in:output.shape[0]-crop_in, crop_in:output.shape[1]-crop_in, :]
