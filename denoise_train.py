@@ -333,13 +333,13 @@ def train_tensors(X, y, learning_rate = 1e-3, mini_batch_size = 16, debug = Fals
                 cost = 0.
 
                 t = time.time()
-                _, _, _, mini_batch_loss, s, d = sess.run([trainop_Y, trainop_Cb, trainop_Cr, loss, summ, denoised], options=run_options, run_metadata=run_metadata)
+                _, _, _, mini_batch_loss, s = sess.run([trainop_Y, trainop_Cb, trainop_Cr, loss, summ], options=run_options, run_metadata=run_metadata)
                 t = time.time() - t
 
                 cost += mini_batch_loss / mini_batch_size
 
-                tf.summary.scalar("Mean Squared Error", epoch_cost)
-                tf.summary.image("denoised", d, 3)
+                tf.summary.scalar("Mean Squared Error", cost)
+                # tf.summary.image("denoised", d, 3)
                 writer.add_summary(s, i)
 
                 i += 1
@@ -370,6 +370,7 @@ def main(args):
 
     lr = args.learning_rate if args.learning_rate else 1e-3
     mbs = args.mini_batch_size if args.mini_batch_size else 16
+    print ("Training with learning rate %E, batch size %d" % (lr, mbs))
 
     if args.dataset_file:
         dataset_file = args.dataset_file

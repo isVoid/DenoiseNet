@@ -9,6 +9,7 @@ from PIL import Image
 from tqdm import tqdm
 
 import time
+import os
 
 import argparse
 
@@ -277,11 +278,9 @@ def main(args):
     name = X_path.split("/")
     name = name[len(name) - 1]
 
-    Image.fromarray(output, mode = "YCbCr").convert("RGB").save(Output_path + name)
-
     # Output loses a few crop_in pixels
     _output = output[crop_in:output.shape[0]-crop_in, crop_in:output.shape[1]-crop_in, :]
-    _y = y[crop_in:y.shape[0]-crop_in, crop_in:output.shape[1]-crop_in:, :]
+    _y = y[crop_in:y.shape[0]-crop_in, crop_in:y.shape[1]-crop_in:, :]
     print ("PSNR: ", psnr(_output, _y))
 
     assert output.shape == X.shape, "Evaluated Output shape(%s) mismatch with Input shape(%s)." % (output.shape, X.shape)
@@ -294,6 +293,8 @@ def main(args):
     name = X_path.split("/")
     name = name[len(name) - 1]
 
+    if not os.path.exists(Output_path):
+        os.mkdir(Output_path)
     Image.fromarray(output, mode = "YCbCr").convert("RGB").save(Output_path + name)
 
     t = time.time() - t
