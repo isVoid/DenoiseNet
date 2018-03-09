@@ -40,14 +40,6 @@ def image_to_patches(img_pad, stride_x, stride_y, mini_batch_size = 200):
 
     total_patches = int(num_patches_x * num_patches_y)
     res = int(total_patches % mini_batch_size)
-
-    # print ("num_patches_x", num_patches_x)
-    # print ("num_patches_y", num_patches_y)
-    # print ("total patches", total_patches)
-    # print ("mini_batch_size", mini_batch_size)
-    # print ("res", res)
-    # print ("n_patches", np.ceil(float(total_patches) / mini_batch_size))
-
     if not res == 0:
         n_patches = total_patches + (mini_batch_size - res)
     else:
@@ -75,18 +67,12 @@ def image_to_patches(img_pad, stride_x, stride_y, mini_batch_size = 200):
         elif x + PATCH_SHAPE[1] >= Wp and y + PATCH_SHAPE[0] >= Hp:
             break
 
-    # print ("batch shape before", batches.shape)
     # Network takes fixed sized input (mini_batch, PATCH_SHAPE), append zeros to meet shape convention.
     if not res == 0:
         for i in range(mini_batch_size-res):
             batches = np.concatenate((batches, patch), axis=0)
 
-    # print ("batch shape after", batches.shape)
-
     batches = batches.reshape(-1, mini_batch_size, PATCH_SHAPE[0], PATCH_SHAPE[1], PATCH_SHAPE[2])
-
-    # print ("batch shape after", batches.shape)
-    # print ("total batches", batches.shape[0])
 
     return batches, res
 
@@ -201,12 +187,17 @@ def eval_image(X, y, model = None, checkpoint = None, mini_batch_size = 16, crop
         stride_y = PATCH_SHAPE[1] - 2 * crop_in
 
         # Pad
-        pad_right = stride_x - ((W - PATCH_SHAPE[1]) % stride_x)
-        pad_bottom = stride_y - ((H - PATCH_SHAPE[0]) % stride_y)
+        pad_h = stride_x - ((W - PATCH_SHAPE[1]) % stride_x)
+        pad_v = stride_y - ((H - PATCH_SHAPE[0]) % stride_y)
+
+        pad_right = pad_h // 2
+        pad_left = pad_h - pad_right
+        pad_bottom = pad_v // 2
+        pad_top = pad_v - pad_bottom
 
         # Zero Pad Input to multiples of PATCH_SHAPE
-        X_pad = np.pad(X, ((0, pad_bottom), (0, pad_right), (0, 0)), 'constant', constant_values = 0)
-        y_pad = np.pad(y, ((0, pad_bottom), (0, pad_right), (0, 0)), 'constant', constant_values = 0)
+        X_pad = np.pad(X, ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)), 'constant', constant_values = 0)
+        y_pad = np.pad(y, ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)), 'constant', constant_values = 0)
 
         Hp, Wp, Cp = X_pad.shape
 
@@ -242,11 +233,12 @@ def eval_image(X, y, model = None, checkpoint = None, mini_batch_size = 16, crop
 
         output = patches_to_image(y_pad, output_patches, stride_x, stride_y)
 
-        """Crop to original size"""
-        output = output[0:X.shape[0], 0:X.shape[1], 0:3]
+        """Outputs effective regions"""
+        print (output.shape)
+        output = output[pad_top:output.shape[0]-pad_bottom, pad_left:output.shape[1]-pad_right, 0:3]
 
         sess.close()
-        return output, total_loss
+        return output, total_loss, [pad_top, pad_bottom, pad_left, pad_right]
 
 def main(args):
     t = time.time()
@@ -255,8 +247,6 @@ def main(args):
     y_path = args.EvalY
     model = args.Model
     ckpt = args.Checkpoint
-
-    crop_in = 8
 
     if args.Output:
         Output_path = args.Output
@@ -272,18 +262,16 @@ def main(args):
     y = y / 255.
 
     # Process with eval_image
-    output, _ = eval_image(X, y, model, ckpt)
+    output, _, pads = eval_image(X, y, model, ckpt)
 
     # Write output as image
     name = X_path.split("/")
     name = name[len(name) - 1]
 
     # Output loses a few crop_in pixels
-    _output = output[crop_in:output.shape[0]-crop_in, crop_in:output.shape[1]-crop_in, :]
-    _y = y[crop_in:y.shape[0]-crop_in, crop_in:y.shape[1]-crop_in:, :]
-    print ("PSNR: ", psnr(_output, _y))
-
-    assert output.shape == X.shape, "Evaluated Output shape(%s) mismatch with Input shape(%s)." % (output.shape, X.shape)
+    # _output = output[crop_in:output.shape[0]-crop_in, crop_in:output.shape[1]-crop_in, :]
+    # _y = y[pads[0]:y.shape[0]-pads[1], pads[2]:y.shape[1]-pads[3]:, :]
+    print ("PSNR: ", psnr(output, y))
 
     output = output * 255.
 

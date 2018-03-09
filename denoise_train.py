@@ -126,6 +126,7 @@ def train(X, y, learning_rate = 1e-3, mini_batch_size = 16, debug = False):
         loss = tf.reduce_sum([lossY, lossCb, lossCr], keep_dims = False)
 
         tf.summary.scalar("Mean Squared Error", loss)
+        tf.summary.image('denoised', denoised, 3)
 
     Y_vars = tf.trainable_variables(scope = "Y")
     Cb_vars = tf.trainable_variables(scope = "Cb")
@@ -177,6 +178,7 @@ def train(X, y, learning_rate = 1e-3, mini_batch_size = 16, debug = False):
         writer = tf.summary.FileWriter(LOGDIR)
         writer.add_graph(sess.graph)
 
+        tf.Graph().finalize() #No update to graph should be performed in the loop
         i = 0
         while(True):
 
@@ -201,8 +203,6 @@ def train(X, y, learning_rate = 1e-3, mini_batch_size = 16, debug = False):
 
                 cost += mini_batch_loss / mini_batch_count
 
-                tf.summary.scalar("Mean Squared Error", cost)
-                tf.summary.image('denoised', d, 3)
                 writer.add_summary(s, i)
 
                 smooth_loss = (smooth_alpha) * smooth_loss + (1-smooth_alpha) * cost
@@ -252,45 +252,46 @@ def train_tensors(X, y, learning_rate = 1e-3, mini_batch_size = 16, debug = Fals
 
     # Build Model
     with tf.device("/gpu:0"):
-
         tf.summary.image('input', X, 3)
         tf.summary.image('groundtruth', y, 3)
 
-        with tf.device("gpu:1"):
-            print ("Y Channel Net")
-            denoisedY, lossY = Denoisenet.feed_forward(X[:, :, :, 0], y[:, :, :, 0], scope = "Y")
-        with tf.device("gpu:2"):
-            print ("Cb Channel Net")
-            denoisedCb, lossCb = Denoisenet.feed_forward(X[:, :, :, 1], y[:, :, :, 1], scope = "Cb")
-        with tf.device("gpu:3"):
-            print ("Cr Channel Net")
-            denoisedCr, lossCr = Denoisenet.feed_forward(X[:, :, :, 2], y[:, :, :, 2], scope = "Cr")
+    with tf.device("/gpu:0"):
+        print ("Y Channel Net")
+        denoisedY, lossY = Denoisenet.feed_forward(X[:, :, :, 0], y[:, :, :, 0], scope = "Y")
+    with tf.device("/gpu:1"):
+        print ("Cb Channel Net")
+        denoisedCb, lossCb = Denoisenet.feed_forward(X[:, :, :, 1], y[:, :, :, 1], scope = "Cb")
+    with tf.device("/gpu:2"):
+        print ("Cr Channel Net")
+        denoisedCr, lossCr = Denoisenet.feed_forward(X[:, :, :, 2], y[:, :, :, 2], scope = "Cr")
 
-        with tf.device("gpu:0"):
-            denoised = tf.stack([denoisedY[:,:,:,0], denoisedCb[:,:,:,0], denoisedCr[:,:,:,0]], axis = 3, name = "denoised")
-            print (denoised.name)
-            loss = tf.reduce_sum([lossY, lossCb, lossCr], keep_dims = False)
+    with tf.device("/gpu:0"):
+        denoised = tf.stack([denoisedY[:,:,:,0], denoisedCb[:,:,:,0], denoisedCr[:,:,:,0]], axis = 3, name = "denoised")
+        print (denoised.name)
+        loss = tf.reduce_sum([lossY, lossCb, lossCr], keep_dims = False)
 
-            tf.summary.scalar("Mean Squared Error", loss)
+        tf.summary.scalar("Mean Squared Error", loss)
+        tf.summary.image("denoised", denoised, 3)
 
-        Y_vars = tf.trainable_variables(scope = "Y")
-        Cb_vars = tf.trainable_variables(scope = "Cb")
-        Cr_vars = tf.trainable_variables(scope = "Cr")
 
-        with tf.device("gpu:1"):
-            optim_Y = tf.train.AdamOptimizer(learning_rate = learning_rate)
-            gvs_Y = optim_Y.compute_gradients(loss, var_list = Y_vars)
-            trainop_Y = optim_Y.apply_gradients(gvs_Y)
-        with tf.device("gpu:2"):
-            optim_Cb = tf.train.AdamOptimizer(learning_rate = learning_rate)
-            gvs_Cb = optim_Y.compute_gradients(loss, var_list = Cb_vars)
-            trainop_Cb = optim_Cb.apply_gradients(gvs_Cb)
-        with tf.device("gpu:3"):
-            optim_Cr = tf.train.AdamOptimizer(learning_rate = learning_rate)
-            gvs_Cr = optim_Y.compute_gradients(loss, var_list = Cr_vars)
-            trainop_Cr = optim_Cr.apply_gradients(gvs_Cr)
+    Y_vars = tf.trainable_variables(scope = "Y")
+    Cb_vars = tf.trainable_variables(scope = "Cb")
+    Cr_vars = tf.trainable_variables(scope = "Cr")
 
-        init = tf.global_variables_initializer()
+    with tf.device("/gpu:0"):
+        optim_Y = tf.train.AdamOptimizer(learning_rate = learning_rate)
+        gvs_Y = optim_Y.compute_gradients(loss, var_list = Y_vars)
+        trainop_Y = optim_Y.apply_gradients(gvs_Y)
+    with tf.device("/gpu:1"):
+        optim_Cb = tf.train.AdamOptimizer(learning_rate = learning_rate)
+        gvs_Cb = optim_Y.compute_gradients(loss, var_list = Cb_vars)
+        trainop_Cb = optim_Cb.apply_gradients(gvs_Cb)
+    with tf.device("/gpu:2"):
+        optim_Cr = tf.train.AdamOptimizer(learning_rate = learning_rate)
+        gvs_Cr = optim_Y.compute_gradients(loss, var_list = Cr_vars)
+        trainop_Cr = optim_Cr.apply_gradients(gvs_Cr)
+
+    init = tf.global_variables_initializer()
 
     # Clear previously saved model
     model_dir = "./Model/denoisenet"
@@ -327,6 +328,7 @@ def train_tensors(X, y, learning_rate = 1e-3, mini_batch_size = 16, debug = Fals
         smooth_time = 1.
         smooth_alpha = 0.9
 
+        tf.Graph().finalize() #No update to graph should be performed in the loop
         try:
             while not coord.should_stop():
 
@@ -338,8 +340,6 @@ def train_tensors(X, y, learning_rate = 1e-3, mini_batch_size = 16, debug = Fals
 
                 cost += mini_batch_loss / mini_batch_size
 
-                tf.summary.scalar("Mean Squared Error", cost)
-                # tf.summary.image("denoised", d, 3)
                 writer.add_summary(s, i)
 
                 i += 1

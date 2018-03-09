@@ -6,6 +6,7 @@ from __future__ import print_function
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
+from MSE_Var import PatchFilter
 
 import argparse
 import os
@@ -228,12 +229,23 @@ def extract_patches(Noisy_List, Clean_List, Noisy_out = './Images/NoisyPatches/'
             patches_c = sample_patches_2d(clean_img, patch_shape, patches_per_image, offset_x, offset_y, random_state)
             patches_n = sample_patches_2d(noisy_img, patch_shape, patches_per_image, offset_x, offset_y, random_state)
 
+            # Empirical values on discard.
+            patch_filter = PatchFilter(MSE_thres = 333, Var_thres = 500, total = len(patches_c))
             for j in range(patches_c.shape[0]):
+                ci = Image.fromarray(patches_c[j])
+                ni = Image.fromarray(patches_n[j])
+                # Difference between Noisy and Clean too large.
+                if patch_filter.filter_with_mse(patches_c[j], patches_n[j]):
+                    continue
+                if patch_filter.filter_with_Var(patches_c[j]):
+                    continue
                 name = "c" + str(count).zfill(7) + ".tiff"
-                Image.fromarray(patches_c[j]).save(Clean_out + name)
+                ci.save(os.path.join(Clean_out, name))
                 name = "n" + str(count).zfill(7) + ".tiff"
-                Image.fromarray(patches_n[j]).save(Noisy_out + name)
+                ni.save(os.path.join(Noisy_out, name))
                 count += 1
+
+            patch_filter.print_discarded_stat()
 
             random_state += 1
             pbar.update(1)
@@ -257,7 +269,7 @@ def get_file_list(dir):
     for root, _ , files in os.walk(dir):
         files = sorted(files)
         for f in files:
-            filename_list.append(root + f)
+            filename_list.append(os.path.join(root, f))
 
     return filename_list
 
