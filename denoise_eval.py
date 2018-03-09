@@ -234,8 +234,11 @@ def eval_image(X, y, model = None, checkpoint = None, mini_batch_size = 16, crop
         output = patches_to_image(y_pad, output_patches, stride_x, stride_y)
 
         """Outputs effective regions"""
-        print (output.shape)
         output = output[pad_top:output.shape[0]-pad_bottom, pad_left:output.shape[1]-pad_right, 0:3]
+
+        """Pixel Clipping"""
+        output[output < 0] = 0
+        output[output > 1] = 1
 
         sess.close()
         return output, total_loss, [pad_top, pad_bottom, pad_left, pad_right]
@@ -268,9 +271,6 @@ def main(args):
     name = X_path.split("/")
     name = name[len(name) - 1]
 
-    # Output loses a few crop_in pixels
-    # _output = output[crop_in:output.shape[0]-crop_in, crop_in:output.shape[1]-crop_in, :]
-    # _y = y[pads[0]:y.shape[0]-pads[1], pads[2]:y.shape[1]-pads[3]:, :]
     print ("PSNR: ", psnr(output, y))
 
     output = output * 255.
