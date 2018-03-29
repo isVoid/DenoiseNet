@@ -12,7 +12,6 @@ PATCH_SHAPE = (128 ,128, 3)
 def _int64_feature(value):
   return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
-
 def _bytes_feature(value):
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
@@ -223,6 +222,12 @@ def input_tfRecords(fn, batch_size):
         print ('nims', nims.name)
 
         return cims, nims
+
+def extract_patches_from_image_tensor(clean_imgt, noisy_imgt):
+    """
+    Extract patches from the given image tensor:
+    
+    """
 
 def main(args):
     root = args.root

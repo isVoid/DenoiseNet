@@ -13,7 +13,7 @@ import os
 
 import argparse
 
-PATCH_SHAPE = (128 ,128, 3)
+PATCH_SHAPE = (128, 128, 3)
 
 def _log10(x):
     return np.log(x) / np.log(10)
@@ -24,7 +24,7 @@ def psnr(test, gt):
     _psnr = 20 * _log10(MAX) - 10 * _log10(MSE)
     return _psnr
 
-def image_to_patches(img_pad, stride_x, stride_y, mini_batch_size = 200):
+def image_to_patches(img_pad, stride_x, stride_y, mini_batch_size=200):
     """Helper function to convert an image input to patches
         Input:
             img_pad: image of size (Hp, Wp, 3), numpy array, padded to multiples of PATCH_SHAPE
@@ -40,12 +40,8 @@ def image_to_patches(img_pad, stride_x, stride_y, mini_batch_size = 200):
 
     total_patches = int(num_patches_x * num_patches_y)
     res = int(total_patches % mini_batch_size)
-    if not res == 0:
-        n_patches = total_patches + (mini_batch_size - res)
-    else:
-        n_patches = total_patches
 
-    batches = np.zeros((n_patches, *PATCH_SHAPE))
+    batches = np.zeros((total_patches, *PATCH_SHAPE))
 
     x = y = 0
     for n in range(total_patches):
@@ -57,7 +53,7 @@ def image_to_patches(img_pad, stride_x, stride_y, mini_batch_size = 200):
         batches[n, :, :, :] = patch
 
         # Next patch along X
-        if (x + PATCH_SHAPE[1] < Wp):
+        if x + PATCH_SHAPE[1] < Wp:
             x += stride_x
         # New line, start from X=0
         elif x + PATCH_SHAPE[1] >= Wp and y + PATCH_SHAPE[0] < Hp:
@@ -67,7 +63,8 @@ def image_to_patches(img_pad, stride_x, stride_y, mini_batch_size = 200):
         elif x + PATCH_SHAPE[1] >= Wp and y + PATCH_SHAPE[0] >= Hp:
             break
 
-    # Network takes fixed sized input (mini_batch, PATCH_SHAPE), append zeros to meet shape convention.
+    # Network takes fixed sized input (mini_batch, PATCH_SHAPE),
+    # append zeros to meet shape convention.
     if not res == 0:
         for i in range(mini_batch_size-res):
             batches = np.concatenate((batches, patch), axis=0)
@@ -93,7 +90,7 @@ def patches_to_image(img, batches_of_patches, stride_x, stride_y):
     crop_in_x = (int)((PATCH_SHAPE[1] - stride_x) / 2)
     crop_in_y = (int)((PATCH_SHAPE[0] - stride_y) / 2)
 
-    h,w,c = PATCH_SHAPE
+    h, w, c = PATCH_SHAPE
     x = y = 0
 
     j = 0
@@ -104,7 +101,9 @@ def patches_to_image(img, batches_of_patches, stride_x, stride_y):
 
             pt = (p * 255).astype("uint8")
             j += 1
+
             # Stitching
+            # pylint: disable=line-too-long
             output[y + crop_in_y : y + PATCH_SHAPE[0] - crop_in_y, x + crop_in_x : x + PATCH_SHAPE[1] - crop_in_x, :] = p
 
             # Next patch along X
@@ -121,7 +120,7 @@ def patches_to_image(img, batches_of_patches, stride_x, stride_y):
     return output
 
 
-def eval_patch(X, y, sess = None):
+def eval_patch(X, y, sess=None):
     """Evaluate some patches input using trained model
         Inputs:
             X: Noisy Image patches, size (N, PATCH_SHAPE), numpy array
@@ -148,7 +147,7 @@ def eval_patch(X, y, sess = None):
 
     return denoised, loss
 
-def eval_image(X, y, model = None, checkpoint = None, mini_batch_size = 16, crop_in = 5):
+def eval_image(X, y, model=None, checkpoint=None, mini_batch_size=16, crop_in=5):
 
     """Evaluate a full image using a trained model
         Achieved by dividing image into various patches and apply model individually.
@@ -169,8 +168,8 @@ def eval_image(X, y, model = None, checkpoint = None, mini_batch_size = 16, crop
 
     tf.reset_default_graph()
 
-    config = tf.ConfigProto(allow_soft_placement = True)
-    with tf.Session(config = config) as sess:
+    config = tf.ConfigProto(allow_soft_placement=True)
+    with tf.Session(config=config) as sess:
         # Load previous model
         saver = tf.train.import_meta_graph(model)
         saver.restore(sess, tf.train.latest_checkpoint(checkpoint))
@@ -202,11 +201,11 @@ def eval_image(X, y, model = None, checkpoint = None, mini_batch_size = 16, crop
         Hp, Wp, Cp = X_pad.shape
 
         x = y = 0
-        while (x + PATCH_SHAPE[1] < Wp):
+        while x + PATCH_SHAPE[1] < Wp:
             x += stride_x
         assert x + PATCH_SHAPE[1] == Wp, "Padding on W is wrong."
 
-        while (y + PATCH_SHAPE[0] < Hp):
+        while y + PATCH_SHAPE[0] < Hp:
             y += stride_y
         assert y + PATCH_SHAPE[0] == Hp, "Padding along H is wrong"
 
@@ -257,8 +256,20 @@ def main(args):
         Output_path = './Output/'
 
     # Read Images, discard alpha channel
-    X = np.asarray(Image.open(X_path).convert("YCbCr"))[:, :, 0:3]
-    y = np.asarray(Image.open(y_path).convert("YCbCr"))[:, :, 0:3]
+    Ximg = Image.open(X_path)
+    Yimg = Image.open(y_path)
+
+    is_gray = len(np.asarray(Ximg).shape) == 2
+
+    X_ycbcr = Ximg.convert('YCbCr')
+    y_ycbcr = Yimg.convert('YCbCr')
+
+    X = np.asarray(X_ycbcr)
+    y = np.asarray(y_ycbcr)
+
+    if X.shape[2] == 4:
+        X = X[:, :, 0:3]
+        y = y[:, :, 0:3]
 
     # Normalize:
     X = X / 255.
@@ -283,7 +294,12 @@ def main(args):
 
     if not os.path.exists(Output_path):
         os.mkdir(Output_path)
-    Image.fromarray(output, mode = "YCbCr").convert("RGB").save(Output_path + name)
+        
+    if not is_gray:
+        Image.fromarray(output, mode = "YCbCr").convert("RGB").save(Output_path + name)
+    else:
+        output = output[:, :, 0].astype(np.uint8)
+        Image.fromarray(output, mode = "L").save(Output_path + name)
 
     t = time.time() - t
     print ("time used(s)", t)
