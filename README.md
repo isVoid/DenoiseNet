@@ -17,10 +17,10 @@ pip install -r requirements.txt
 
 #### Evaluate with pretrained model:
 ```shell
-python3 denoise_eval.py ./data/n000.tif ./data/c000.tif ./Model/denoisenet/denoise_model_I119000.ckpt-119000.meta ./Model/denoisenet/
+python3 denoise_eval.py ./data/n000.tif ./data/c000.tif ./Model/denoisenet/denoise_model_I404000.ckpt-404000.meta ./Model/denoisenet/
 ```
 
-Where `./Model/denoisenet/denoise_model_I119000.ckpt-119000.meta` is tensorflow graph definition, `./Model/denoisenet/` is where checkpoint file locates.
+Where `./Model/denoisenet/denoise_model_I404000.ckpt-404000.meta` is tensorflow graph definition, `./Model/denoisenet/` is where checkpoint file locates.
 
 See more with `python3 denoise_eval -h`
 

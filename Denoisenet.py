@@ -29,7 +29,7 @@ def feed_forward(X_train, y_train = None, scope = ""):
         X_train = tf.expand_dims(X_train, -1)
         y_train = tf.expand_dims(y_train, -1)
 
-    n_layers = 17
+    n_layers = 7
     conv_prev = X_train
     layer_lists = []
     last_channels = []
@@ -40,7 +40,7 @@ def feed_forward(X_train, y_train = None, scope = ""):
 
         conv = tf.contrib.layers.conv2d(conv_prev,
                         num_outputs = 32,
-                        kernel_size = 7,
+                        kernel_size = 5,
                         stride = 1,
                         padding = 'SAME',
                         data_format = None,
