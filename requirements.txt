@@ -6,7 +6,7 @@ command-not-found==0.3
 configobj==5.0.6
 cryptography==1.2.3
 enum34==1.1.6
-html5lib==0.9999999
+html5lib==0.99999999
 idna==2.0
 Jinja2==2.8
 jsonpatch==1.10
