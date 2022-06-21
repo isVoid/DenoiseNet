@@ -14,7 +14,7 @@ jsonpointer==1.9
 language-selector==0.1
 Markdown==2.6.10
 MarkupSafe==0.23
-numpy==1.13.3
+numpy==1.22.0
 oauthlib==1.0.3
 olefile==0.44
 Pillow==4.3.0
